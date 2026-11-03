@@ -60,9 +60,6 @@
   .seg button{border:2px solid var(--line);background:#fff;border-radius:10px;padding:12px;font:inherit;font-weight:600;color:var(--text)}
   .seg button.on.ok{border-color:var(--primary);background:var(--today-bg);color:var(--primary-dark)}
   .seg button.on.fail{border-color:var(--danger);background:var(--late-bg);color:var(--danger)}
-  .photo-box{border:2px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted);position:relative;overflow:hidden}
-  .photo-box img{max-width:100%;max-height:260px;border-radius:8px;display:block;margin:0 auto}
-  .photo-box input{position:absolute;inset:0;opacity:0;width:100%;height:100%}
   .toast{position:fixed;left:16px;right:16px;bottom:24px;background:#1d2330;color:#fff;padding:14px;border-radius:12px;text-align:center;z-index:30;display:none;max-width:600px;margin:0 auto}
   .spinner{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite;margin-bottom:14px}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -85,7 +82,7 @@ const LIFF_ID = '2012335287-wc7r8hpp';               // เช่น 2001234567-
 const API_URL = 'https://script.google.com/macros/s/AKfycbwnqhB9HIZXEzWaUYeYUUGIUU47XVPjpnwa4aZ1soqhGLzLyqK4HAUcSFjYxIkVX_W2HQ/exec';   // จาก Apps Script > Deploy
 /* ============================================================ */
 
-const state = { idToken: null, data: null, tab: 'pending', job: null, result: 'success', photo: null, busy: false };
+const state = { idToken: null, data: null, tab: 'pending', job: null, result: 'success', busy: false };
 const $ = s => document.querySelector(s);
 const app = $('#app');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -259,7 +256,6 @@ function openMap(id) {
 function openClose(id) {
   state.job = findJob(id);
   state.result = 'success';
-  state.photo = null;
   renderSheet();
   $('#sheetBg').classList.add('open');
 }
@@ -279,12 +275,6 @@ function renderSheet() {
       <button class="${!ok ? 'on fail' : ''}" data-r="fail">ส่งไม่สำเร็จ</button>
     </div>
 
-    <label>รูปหลักฐาน ${ok ? '<span class="req">*</span>' : '(ถ้ามี)'}</label>
-    <div class="photo-box" id="photoBox">
-      ${state.photo ? `<img src="${state.photo}" alt="รูปหลักฐาน"><div class="meta">แตะเพื่อถ่ายใหม่</div>` : 'แตะเพื่อถ่ายรูป<br><small>เช่น สินค้าที่วางหน้าบ้าน / ลูกค้ารับของ</small>'}
-      <input type="file" accept="image/*" capture="environment" id="photoInput">
-    </div>
-
     ${ok && j.cod > 0 ? `
       <label>ยอดเงินที่เก็บได้ (บาท) <span class="req">*</span></label>
       <input id="codInput" type="number" inputmode="decimal" value="${j.cod}">
@@ -301,15 +291,6 @@ function renderSheet() {
     state.result = b.dataset.r;
     renderSheet();
   });
-  $('#photoInput').onchange = async ev => {
-    const f = ev.target.files && ev.target.files[0];
-    if (!f) return;
-    try {
-      state.photo = await resizeImage(f);
-      state.noteDraft = $('#noteInput').value;
-      renderSheet();
-    } catch { toast('อ่านรูปไม่ได้ ลองถ่ายใหม่'); }
-  };
   $('#cancelBtn').onclick = closeSheet;
   $('#submitBtn').onclick = submitClose;
 }
@@ -317,7 +298,6 @@ function renderSheet() {
 async function submitClose() {
   const j = state.job, ok = state.result === 'success';
   const note = $('#noteInput').value.trim();
-  if (ok && !state.photo) return toast('กรุณาถ่ายรูปหลักฐาน');
   if (!ok && !note) return toast('กรุณาระบุเหตุผล');
   const payload = { jobId: j.jobId, result: state.result, note };
   if (ok && j.cod > 0) {
@@ -325,7 +305,6 @@ async function submitClose() {
     if (v === '' || isNaN(Number(v))) return toast('กรุณากรอกยอดเงินที่เก็บได้');
     payload.codCollected = v;
   }
-  if (state.photo) payload.photo = state.photo;
 
   const btn = $('#submitBtn');
   state.busy = true; btn.disabled = true; btn.textContent = 'กำลังบันทึก...';
@@ -346,24 +325,6 @@ async function submitClose() {
 }
 
 /* ---------------- utilities ---------------- */
-function resizeImage(file, max = 1280, quality = 0.72) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const s = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * s);
-      c.height = Math.round(img.height * s);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      resolve(c.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
-    img.src = url;
-  });
-}
-
 function getLocation() {
   return new Promise(resolve => {
     if (!navigator.geolocation) return resolve(null);
